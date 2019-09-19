@@ -10,9 +10,72 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
-df = pd.read_excel("API_output.xlsx")
+#df = pd.read_excel("API_output.xlsx")
 #print(df.head())
+import urllib.request, json
+from requests.exceptions import ConnectionError
+import plotly.plotly as py
+import cufflinks as cf
+#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+#cf.go_offline
+#init_notebook_mode(connected=True)
+import pandas as pd
+import numpy as np
+import datetime
+#import plotly
+#print(plotly.__version__)
+#print(cf.__version__)
 
+def get_data(x):
+    year = x.strftime("%Y")
+    month = x.strftime("%m")
+    day = x.strftime("%d")
+    URL = 'http://apims.doe.gov.my/data/public/CAQM/hours24/' + year + '/' + month + '/' + day + '/0000.json'
+    try:
+        with urllib.request.urlopen(URL) as url:
+            data = json.loads(url.read().decode())
+
+            df = pd.DataFrame(data['24hour_api'])
+            df.columns = df.iloc[0]
+            df.index = df['State'] + ' - ' + df['Location']
+            df = df.drop(['State - Location'])
+            df = df.replace('\**', '', regex=True)
+            df = df.drop(columns='State')
+            df = df.drop(columns='Location')
+            df = df.T
+            df.index.name = x.strftime("%Y-%b-%d")
+            df.index = pd.date_range(start=pd.datetime(int(year), int(month), int(day), 1),
+                                     end=pd.datetime(int(year), int(month), int(day), 1) + pd.DateOffset(1),
+                                     freq="H")[:24]
+            return df
+    except IOError:
+        print("404 Not Found")
+        pass
+
+    df = pd.DataFrame()
+    return df
+
+
+Y = pd.to_datetime('today').year
+M = pd.to_datetime('today').month
+D = pd.to_datetime('today').day
+H = pd.to_datetime('today').hour
+start = datetime.datetime(Y-3,M,D)
+
+end = datetime.datetime(Y,M,D,H)
+daterange = [start + datetime.timedelta(days=x) for x in range(0, (end-start).days+1)]
+
+
+#print(start)
+df = get_data(start)
+for i,x in enumerate(daterange[1:]):
+    #print(x)
+    df=df.append(get_data(x))
+#print(end)
+# delete all rows after
+indexNames = df[df.index > end].index
+df.drop(indexNames , inplace=True)
+df.index.name = 'Date'
 
 available_locations = df.columns[1:].unique()
 
